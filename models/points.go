@@ -356,9 +356,12 @@ func parsePoint(buf []byte, defaultTime time.Time, precision string) (Point, err
 			return nil, err
 		}
 
-		
+		newPrecision := precision
 		if precision == timeStampPrecisionNotSet {
-			newPrecision = GuessPrecision(ts)
+			newPrecision, err = GuessPrecision(ts)
+			if err != nil {
+				return nil, err
+			}
 		}
 		
 		pt.time, err = SafeCalcTime(ts, newPrecision)
@@ -389,7 +392,7 @@ func GuessPrecision(ts int64) (string, error) {
 
 	
 	
-	timeNow := time.Now().UTC()
+	timeNow := time.Now()
 	// we are going to exclude minute and hour because they may cause errors
 	// for times in the distant past (probably more likely for minutes than hours)
 	// how this works: if we intend (s) precision, and use a date < October 1970,
@@ -400,10 +403,10 @@ func GuessPrecision(ts int64) (string, error) {
 	timeCalc, err := SafeCalcTime(ts, precisions[0])
 
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	
-	bestDist := math.abs(time.Since(timeCalc))
+	bestDist := math.Abs(timeNow.Sub(timeCalc).Seconds())
 	bestPrec := precisions[0]
 	
 	nextDist := bestDist
@@ -416,9 +419,9 @@ func GuessPrecision(ts int64) (string, error) {
 		nextPrec = precisions[i]
 		timeCalc, err := SafeCalcTime(ts, nextPrec)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
-		nextDist = math.abs(time.Since(timeCalc))
+		nextDist = math.Abs(timeNow.Sub(timeCalc).Seconds())
 	}
 
 	return bestPrec, nil
