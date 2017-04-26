@@ -28,9 +28,7 @@ var (
 		'=': []byte(`\=`),
 	}
 
-	// Default timestamp precision so it can be easily changed
-	DefaultTimeStampPrecision = "n"
-	timeStampPrecisionNotSet = "not-set"
+
 	
 	// ErrPointMustHaveAField is returned when operating on a point that does not have any fields.
 	ErrPointMustHaveAField = errors.New("point without fields is unsupported")
@@ -45,6 +43,9 @@ var (
 const (
 	// MaxKeyLength is the largest allowed size of the combined measurement and tag keys.
 	MaxKeyLength = 65535
+	// constant to show that we've not gotten a precision from the user.  
+	timeStampPrecisionNotSet = "not-set"
+
 )
 
 // Point defines the values that will be written to the database.
