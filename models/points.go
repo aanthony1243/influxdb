@@ -28,6 +28,10 @@ var (
 		'=': []byte(`\=`),
 	}
 
+	// Default timestamp precision so it can be easily changed
+	DefaultTimeStampPrecision = "n"
+	timeStampPrecisionNotSet = "not-set"
+	
 	// ErrPointMustHaveAField is returned when operating on a point that does not have any fields.
 	ErrPointMustHaveAField = errors.New("point without fields is unsupported")
 
@@ -222,7 +226,7 @@ const (
 // with each point separated by newlines.  If any points fail to parse, a non-nil error
 // will be returned in addition to the points that parsed successfully.
 func ParsePoints(buf []byte) ([]Point, error) {
-	return ParsePointsWithPrecision(buf, time.Now().UTC(), "n")
+	return ParsePointsWithPrecision(buf, time.Now().UTC(), timeStampPrecisionNotSet)
 }
 
 // ParsePointsString is identical to ParsePoints but accepts a string.
@@ -341,13 +345,27 @@ func parsePoint(buf []byte, defaultTime time.Time, precision string) (Point, err
 
 	if len(ts) == 0 {
 		pt.time = defaultTime
-		pt.SetPrecision(precision)
+		if precision == timeStampPrecisionNotSet {
+			pt.SetPrecision( DefaultTimeStampPrecision )
+		} else {
+			pt.SetPrecision(precision)
+		}
 	} else {
 		ts, err := parseIntBytes(ts, 10, 64)
 		if err != nil {
 			return nil, err
 		}
-		pt.time, err = SafeCalcTime(ts, precision)
+
+		
+		if precision == timeStampPrecisionNotSet {
+			newPrecision = GuessPrecision(ts)
+		}
+		
+		pt.time, err = SafeCalcTime(ts, newPrecision)
+		// bug?  pt.SetPrecision is not called in this case...
+		// we'll add it in to see if it affects any tests and post a ticket if needed. 
+		pt.SetPrecision(newPrecision)
+		
 		if err != nil {
 			return nil, err
 		}
@@ -363,6 +381,41 @@ func parsePoint(buf []byte, defaultTime time.Time, precision string) (Point, err
 	}
 	return pt, nil
 }
+
+
+// guess precision:  we need to guess the precision as the one that puts the given
+// time stamp closest to the current time.  We have some advantages:
+func GuessPrecision(ts int64) (string, error) {
+
+	// TODO: handle errors appropriately
+	
+	timeNow := time.Now().UTC()
+	// we are going to exclude minute and hour because they may cause errors
+	// for times in the distant past (probably more likely for minutes than hours)
+	// how this works: if we intend (s) precision, and use a date < October 1970,
+	// allowing minutes as a precision would find the time closer to NOW if we use
+	// minutes instead of (s). 
+	precisions := []string{"n", "u", "ms", "s"} 
+	// any time stamp given can be interpreted as nano, so it's our initial best
+	timeCalc, err := SafeCalcTime(ts, precisions[0])
+	bestDist := math.abs(time.Since(timeCalc))
+	bestPrec := precisions[0]
+	
+	nextDist := bestDist
+	nextPrec := bestPrec
+	
+	for i := 1; nextDist <= bestDist && i < len(precisions); i++ {
+		bestDist = nextDist
+		bestPrec = nextPrec
+		
+		nextPrec = precisions[i]
+		timeCalc, err := SafeCalcTime(ts, nextPrec)
+		nextDist = math.abs(time.Since(timeCalc))
+	}
+
+	return bestPrec, nil
+}
+
 
 // GetPrecisionMultiplier will return a multiplier for the precision specified.
 func GetPrecisionMultiplier(precision string) int64 {
