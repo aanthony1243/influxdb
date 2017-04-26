@@ -387,7 +387,7 @@ func parsePoint(buf []byte, defaultTime time.Time, precision string) (Point, err
 // time stamp closest to the current time.  We have some advantages:
 func GuessPrecision(ts int64) (string, error) {
 
-	// TODO: handle errors appropriately
+	
 	
 	timeNow := time.Now().UTC()
 	// we are going to exclude minute and hour because they may cause errors
@@ -398,6 +398,11 @@ func GuessPrecision(ts int64) (string, error) {
 	precisions := []string{"n", "u", "ms", "s"} 
 	// any time stamp given can be interpreted as nano, so it's our initial best
 	timeCalc, err := SafeCalcTime(ts, precisions[0])
+
+	if err != nil {
+		return nil, err
+	}
+	
 	bestDist := math.abs(time.Since(timeCalc))
 	bestPrec := precisions[0]
 	
@@ -410,6 +415,9 @@ func GuessPrecision(ts int64) (string, error) {
 		
 		nextPrec = precisions[i]
 		timeCalc, err := SafeCalcTime(ts, nextPrec)
+		if err != nil {
+			return nil, err
+		}
 		nextDist = math.abs(time.Since(timeCalc))
 	}
 
