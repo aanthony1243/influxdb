@@ -273,7 +273,9 @@ func NewTestPoint(name string, tags models.Tags, fields models.Fields, time time
 	}
 }
 
-// TODO (adam): see if I can design out the line parameter here?
+// NOTE: the line parameter is only for error reporting.  there could be an alternative, but
+// need to think about if there's a case where we don't have a 'line' to provide here.  perhaps we rename that to
+// 'errorHint' or something...
 // a point is equal to the TestPoint if:
 func testPointsEqual(t *testing.T, line string, point TestPoint, checkPoint models.Point) {
 	// 1.  It has the same key set
@@ -353,7 +355,7 @@ func checkLineParsing(t *testing.T, line string, withPrecision string) models.Po
 // this is a legacy function that many tests depend on, so it's not advisable to change the signature.
 // the most useful code within it is to check for a correct parse, and then to compare to the TestPoint
 // so I extracted that out to helper functions so that we can re-use the code for other approaches
-// NOTE::  initially I needed this but then I found a more efficient way to test the precision guess functionality using a different check. 
+// NOTE (adam):  initially I needed this but then I found a more efficient way to test the precision guess functionality using a different check. 
 func test(t *testing.T, line string, point TestPoint) {
 	pt := checkLineParsing(t, line, "n")
 	testPointsEqual(t, line, point, pt)
