@@ -44,7 +44,7 @@ const (
 	// MaxKeyLength is the largest allowed size of the combined measurement and tag keys.
 	MaxKeyLength = 65535
 	// constant to show that we've not gotten a precision from the user.  
-	timeStampPrecisionNotSet = "not-set"
+	TimeStampPrecisionNotSet = "not-set"
 
 )
 
@@ -227,7 +227,7 @@ const (
 // with each point separated by newlines.  If any points fail to parse, a non-nil error
 // will be returned in addition to the points that parsed successfully.
 func ParsePoints(buf []byte) ([]Point, error) {
-	return ParsePointsWithPrecision(buf, time.Now().UTC(), timeStampPrecisionNotSet)
+	return ParsePointsWithPrecision(buf, time.Now().UTC(), TimeStampPrecisionNotSet)
 }
 
 // ParsePointsString is identical to ParsePoints but accepts a string.
@@ -346,8 +346,8 @@ func parsePoint(buf []byte, defaultTime time.Time, precision string) (Point, err
 
 	if len(ts) == 0 {
 		pt.time = defaultTime
-		if precision == timeStampPrecisionNotSet {
-			pt.SetPrecision( DefaultTimeStampPrecision )
+		if precision == TimeStampPrecisionNotSet || precision == "" {
+			pt.SetPrecision( "" )
 		} else {
 			pt.SetPrecision(precision)
 		}
@@ -358,7 +358,7 @@ func parsePoint(buf []byte, defaultTime time.Time, precision string) (Point, err
 		}
 
 		newPrecision := precision
-		if precision == timeStampPrecisionNotSet {
+		if precision == TimeStampPrecisionNotSet  || precision == "" {
 			newPrecision, err = GuessPrecision(ts)
 			if err != nil {
 				return nil, err
@@ -425,7 +425,8 @@ func GuessPrecision(ts int64) (string, error) {
 		nextDist = math.Abs(timeNow.Sub(timeCalc).Seconds())
 	}
 
-	return bestPrec, nil
+	//return bestPrec, nil
+	return "n", nil
 }
 
 

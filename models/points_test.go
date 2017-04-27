@@ -273,32 +273,28 @@ func NewTestPoint(name string, tags models.Tags, fields models.Fields, time time
 	}
 }
 
-func test(t *testing.T, line string, point TestPoint) {
-	pts, err := models.ParsePointsWithPrecision([]byte(line), time.Unix(0, 0), "n")
-	if err != nil {
-		t.Fatalf(`ParsePoints("%s") mismatch. got %v, exp nil`, line, err)
+// TODO (adam): see if I can design out the line parameter here?
+// a point is equal to the TestPoint if:
+func testPointsEqual(t *testing.T, line string, point TestPoint, checkPoint models.Point) {
+	// 1.  It has the same key set
+	if exp := point.Key(); !bytes.Equal(checkPoint.Key(), exp) {
+		t.Errorf("ParsePoints(\"%s\") key mismatch.\ngot %v\nexp %v", line, string(checkPoint.Key()), string(exp))
 	}
-
-	if exp := 1; len(pts) != exp {
-		t.Fatalf(`ParsePoints("%s") len mismatch. got %d, exp %d`, line, len(pts), exp)
+	// 2.  It has the same number of tags
+	if exp := len(point.Tags()); len(checkPoint.Tags()) != exp {
+		t.Errorf(`ParsePoints("%s") tags mismatch. got %v, exp %v`, line, checkPoint.Tags(), exp)
 	}
-
-	if exp := point.Key(); !bytes.Equal(pts[0].Key(), exp) {
-		t.Errorf("ParsePoints(\"%s\") key mismatch.\ngot %v\nexp %v", line, string(pts[0].Key()), string(exp))
-	}
-
-	if exp := len(point.Tags()); len(pts[0].Tags()) != exp {
-		t.Errorf(`ParsePoints("%s") tags mismatch. got %v, exp %v`, line, pts[0].Tags(), exp)
-	}
-
-	for _, tag := range pts[0].Tags() {
+	
+	// 3.  Its tags are all the same, and each tag has the same value. 
+	for _, tag := range checkPoint.Tags() {
 		if !bytes.Equal(tag.Value, point.RawTags.Get(tag.Key)) {
 			t.Errorf(`ParsePoints("%s") tags mismatch. got %s, exp %s`, line, tag.Value, point.RawTags.Get(tag.Key))
 		}
 	}
 
+	// 4.  its value set has the same names and values.  
 	for name, value := range point.RawFields {
-		fields, err := pts[0].Fields()
+		fields, err := checkPoint.Fields()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -316,13 +312,51 @@ func test(t *testing.T, line string, point TestPoint) {
 		}
 	}
 
-	if !pts[0].Time().Equal(point.Time()) {
-		t.Errorf(`ParsePoints("%s") time mismatch. got %v, exp %v`, line, pts[0].Time(), point.Time())
+	// 5.  the assigned + parsed time is the same
+	if !checkPoint.Time().Equal(point.Time()) {
+		t.Errorf(`ParsePoints("%s") time mismatch. got %v, exp %v`, line, checkPoint.Time(), point.Time())
+	}
+}
+
+// when we parse a line, there's three things that can go wrong:
+// 1.  the parsing fails
+// 2.  we parsed more points than expected (say, from a whitespace parsing error)
+// 3.  the string representation of the point is somehow different from the original line.
+// we return the point so it can be used for tests.  
+func checkLineParsing(t *testing.T, line string, withPrecision string) models.Point {
+	var pts []models.Point
+	var err interface{}
+	
+	if withPrecision != "" {
+		pts, err = models.ParsePointsWithPrecision([]byte(line), time.Unix(0, 0), withPrecision)
+	} else {
+		pts, err = models.ParsePoints([]byte(line))
+	}
+	if err != nil {
+		t.Fatalf(`ParsePoints("%s") mismatch. got %v, exp nil`, line, err)
+		return nil
+	}
+
+	if exp := 1; len(pts) != exp {
+		t.Fatalf(`ParsePoints("%s") len mismatch. got %d, exp %d`, line, len(pts), exp)
+		return nil
 	}
 
 	if !strings.HasPrefix(pts[0].String(), line) {
 		t.Errorf("ParsePoints string mismatch.\ngot: %v\nexp: %v", pts[0].String(), line)
 	}
+
+	return pts[0]
+}
+
+// function test is a helper that will parse a string, and then check to see if the parsing matches the test point that we have created.
+// this is a legacy function that many tests depend on, so it's not advisable to change the signature.
+// the most useful code within it is to check for a correct parse, and then to compare to the TestPoint
+// so I extracted that out to helper functions so that we can re-use the code for other approaches
+// NOTE::  initially I needed this but then I found a more efficient way to test the precision guess functionality using a different check. 
+func test(t *testing.T, line string, point TestPoint) {
+	pt := checkLineParsing(t, line, "n")
+	testPointsEqual(t, line, point, pt)
 }
 
 func TestParsePointNoValue(t *testing.T) {
@@ -737,6 +771,8 @@ func TestParsePointScientificIntInvalid(t *testing.T) {
 		t.Errorf(`ParsePoints("%s") mismatch. got nil, exp error`, `cpu,host=serverA,region=us-west value=9e10i`)
 	}
 }
+
+
 
 func TestParsePointWhitespace(t *testing.T) {
 	examples := []string{
@@ -1593,34 +1629,52 @@ func TestParsePointsWithPrecision(t *testing.T) {
 		exp       string
 	}{
 		{
-			name:      "nanosecond by default",
-			line:      `cpu,host=serverA,region=us-east value=1.0 946730096789012345`,
-			precision: "",
-			exp:       "cpu,host=serverA,region=us-east value=1.0 946730096789012345",
+			name:      "nanosecond by default guess",
+			line:      `cpu,host=serverA,region=us-east value=1.0 916730096789012345`,
+			precision: models.TimeStampPrecisionNotSet,
+			exp:       "cpu,host=serverA,region=us-east value=1.0 916730096789012345",
+		},
+		{
+			name:      "microsecond by default guess",
+			line:      `cpu,host=serverA,region=us-east value=1.0 916730096789012`,
+			precision: models.TimeStampPrecisionNotSet,
+			exp:       "cpu,host=serverA,region=us-east value=1.0 916730096789012000",
+		},
+		{
+			name:      "millisecond by default guess",
+			line:      `cpu,host=serverA,region=us-east value=1.0 916730096789`,
+			precision: models.TimeStampPrecisionNotSet,
+			exp:       "cpu,host=serverA,region=us-east value=1.0 916730096789000000",
+		},
+		{
+			name:      "second by default guess",
+			line:      `cpu,host=serverA,region=us-east value=1.0 916730096`,
+			precision: models.TimeStampPrecisionNotSet,
+			exp:       "cpu,host=serverA,region=us-east value=1.0 916730096000000000",
 		},
 		{
 			name:      "nanosecond",
-			line:      `cpu,host=serverA,region=us-east value=1.0 946730096789012345`,
+			line:      `cpu,host=serverA,region=us-east value=1.0 916730096789012345`,
 			precision: "n",
-			exp:       "cpu,host=serverA,region=us-east value=1.0 946730096789012345",
+			exp:       "cpu,host=serverA,region=us-east value=1.0 916730096789012345",
 		},
 		{
 			name:      "microsecond",
-			line:      `cpu,host=serverA,region=us-east value=1.0 946730096789012`,
+			line:      `cpu,host=serverA,region=us-east value=1.0 916730096789012`,
 			precision: "u",
-			exp:       "cpu,host=serverA,region=us-east value=1.0 946730096789012000",
+			exp:       "cpu,host=serverA,region=us-east value=1.0 916730096789012000",
 		},
 		{
 			name:      "millisecond",
-			line:      `cpu,host=serverA,region=us-east value=1.0 946730096789`,
+			line:      `cpu,host=serverA,region=us-east value=1.0 916730096789`,
 			precision: "ms",
-			exp:       "cpu,host=serverA,region=us-east value=1.0 946730096789000000",
+			exp:       "cpu,host=serverA,region=us-east value=1.0 916730096789000000",
 		},
 		{
 			name:      "second",
-			line:      `cpu,host=serverA,region=us-east value=1.0 946730096`,
+			line:      `cpu,host=serverA,region=us-east value=1.0 916730096`,
 			precision: "s",
-			exp:       "cpu,host=serverA,region=us-east value=1.0 946730096000000000",
+			exp:       "cpu,host=serverA,region=us-east value=1.0 916730096000000000",
 		},
 		{
 			name:      "minute",
