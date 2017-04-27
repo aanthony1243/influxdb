@@ -28,8 +28,6 @@ var (
 		'=': []byte(`\=`),
 	}
 
-
-	
 	// ErrPointMustHaveAField is returned when operating on a point that does not have any fields.
 	ErrPointMustHaveAField = errors.New("point without fields is unsupported")
 
@@ -43,9 +41,8 @@ var (
 const (
 	// MaxKeyLength is the largest allowed size of the combined measurement and tag keys.
 	MaxKeyLength = 65535
-	// constant to show that we've not gotten a precision from the user.  
+	// constant to show that we've not gotten a precision from the user.
 	TimeStampPrecisionNotSet = "not-set"
-
 )
 
 // Point defines the values that will be written to the database.
@@ -347,7 +344,7 @@ func parsePoint(buf []byte, defaultTime time.Time, precision string) (Point, err
 	if len(ts) == 0 {
 		pt.time = defaultTime
 		if precision == TimeStampPrecisionNotSet || precision == "" {
-			pt.SetPrecision( "n" )
+			pt.SetPrecision("n")
 		} else {
 			pt.SetPrecision(precision)
 		}
@@ -358,18 +355,18 @@ func parsePoint(buf []byte, defaultTime time.Time, precision string) (Point, err
 		}
 
 		newPrecision := precision
-		if precision == TimeStampPrecisionNotSet  || precision == "" {
+		if precision == TimeStampPrecisionNotSet || precision == "" {
 			newPrecision, err = GuessPrecision(ts)
 			if err != nil {
 				return nil, err
 			}
 		}
-		
+
 		pt.time, err = SafeCalcTime(ts, newPrecision)
 		// bug?  pt.SetPrecision is not called in this case...
-		// we'll add it in to see if it affects any tests and post a ticket if needed. 
+		// we'll add it in to see if it affects any tests and post a ticket if needed.
 		pt.SetPrecision(newPrecision)
-		
+
 		if err != nil {
 			return nil, err
 		}
@@ -386,32 +383,29 @@ func parsePoint(buf []byte, defaultTime time.Time, precision string) (Point, err
 	return pt, nil
 }
 
-
 // guess precision:  we need to guess the precision as the one that puts the given
 // time stamp closest to the current time.  We have some advantages:
 func GuessPrecision(ts int64) (string, error) {
 
-	
-	
 	timeNow := time.Now()
 	// we are going to exclude minute and hour because they may cause errors
 	// for times in the distant past (probably more likely for minutes than hours)
 	// how this works: if we intend (s) precision, and use a date < October 1970,
 	// allowing minutes as a precision would find the time closer to NOW if we use
-	// minutes instead of (s). 
-	precisions := []string{"n", "u", "ms", "s"} 
+	// minutes instead of (s).
+	precisions := []string{"n", "u", "ms", "s"}
 	// any time stamp given can be interpreted as nano, so it's our initial best
 	timeCalc, err := SafeCalcTime(ts, precisions[0])
 
 	// we want to return default here, but there's certainly something wrong.
-	// we can't even parse the value as ns.  this will cascade up to other functions.  
+	// we can't even parse the value as ns.  this will cascade up to other functions.
 	if err != nil {
 		return "", err
 	}
-	
+
 	bestDist := math.Abs(timeNow.Sub(timeCalc).Seconds())
 	bestPrec := precisions[0]
-	
+
 	nextDist := bestDist
 	nextPrec := bestPrec
 
@@ -422,19 +416,19 @@ func GuessPrecision(ts int64) (string, error) {
 	// but I thought this to be the more important condition in the logic, so I put in the most prominent location.
 	// likewise, I kept the index control variable out of the 'for' because it confused what was going on a bit
 	for nextDist <= bestDist {
-		// make sure we update our best version so far 
+		// make sure we update our best version so far
 		bestDist = nextDist
 		bestPrec = nextPrec
 
-		// we reached the end of the slice, we should stop.  
-		if  i >= len(precisions) {
+		// we reached the end of the slice, we should stop.
+		if i >= len(precisions) {
 			break
 		}
-		
+
 		nextPrec = precisions[i]
 		timeCalc, err := SafeCalcTime(ts, nextPrec)
 		// this is not necessarily an error.  this means that this precision and all after it will
-		// cause an overflow.  
+		// cause an overflow.
 		if err != nil {
 			break
 		}
@@ -445,7 +439,6 @@ func GuessPrecision(ts int64) (string, error) {
 
 	return bestPrec, nil
 }
-
 
 // GetPrecisionMultiplier will return a multiplier for the precision specified.
 func GetPrecisionMultiplier(precision string) int64 {

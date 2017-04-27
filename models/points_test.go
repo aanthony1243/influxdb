@@ -286,15 +286,15 @@ func testPointsEqual(t *testing.T, line string, point TestPoint, checkPoint mode
 	if exp := len(point.Tags()); len(checkPoint.Tags()) != exp {
 		t.Errorf(`ParsePoints("%s") tags mismatch. got %v, exp %v`, line, checkPoint.Tags(), exp)
 	}
-	
-	// 3.  Its tags are all the same, and each tag has the same value. 
+
+	// 3.  Its tags are all the same, and each tag has the same value.
 	for _, tag := range checkPoint.Tags() {
 		if !bytes.Equal(tag.Value, point.RawTags.Get(tag.Key)) {
 			t.Errorf(`ParsePoints("%s") tags mismatch. got %s, exp %s`, line, tag.Value, point.RawTags.Get(tag.Key))
 		}
 	}
 
-	// 4.  its value set has the same names and values.  
+	// 4.  its value set has the same names and values.
 	for name, value := range point.RawFields {
 		fields, err := checkPoint.Fields()
 		if err != nil {
@@ -324,11 +324,11 @@ func testPointsEqual(t *testing.T, line string, point TestPoint, checkPoint mode
 // 1.  the parsing fails
 // 2.  we parsed more points than expected (say, from a whitespace parsing error)
 // 3.  the string representation of the point is somehow different from the original line.
-// we return the point so it can be used for tests.  
+// we return the point so it can be used for tests.
 func checkLineParsing(t *testing.T, line string, withPrecision string) models.Point {
 	var pts []models.Point
 	var err interface{}
-	
+
 	if withPrecision != "" {
 		pts, err = models.ParsePointsWithPrecision([]byte(line), time.Unix(0, 0), withPrecision)
 	} else {
@@ -355,7 +355,7 @@ func checkLineParsing(t *testing.T, line string, withPrecision string) models.Po
 // this is a legacy function that many tests depend on, so it's not advisable to change the signature.
 // the most useful code within it is to check for a correct parse, and then to compare to the TestPoint
 // so I extracted that out to helper functions so that we can re-use the code for other approaches
-// NOTE (adam):  initially I needed this but then I found a more efficient way to test the precision guess functionality using a different check. 
+// NOTE (adam):  initially I needed this but then I found a more efficient way to test the precision guess functionality using a different check.
 func test(t *testing.T, line string, point TestPoint) {
 	pt := checkLineParsing(t, line, "n")
 	testPointsEqual(t, line, point, pt)
@@ -773,8 +773,6 @@ func TestParsePointScientificIntInvalid(t *testing.T) {
 		t.Errorf(`ParsePoints("%s") mismatch. got nil, exp error`, `cpu,host=serverA,region=us-west value=9e10i`)
 	}
 }
-
-
 
 func TestParsePointWhitespace(t *testing.T) {
 	examples := []string{
