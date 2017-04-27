@@ -347,7 +347,7 @@ func parsePoint(buf []byte, defaultTime time.Time, precision string) (Point, err
 	if len(ts) == 0 {
 		pt.time = defaultTime
 		if precision == TimeStampPrecisionNotSet || precision == "" {
-			pt.SetPrecision( "" )
+			pt.SetPrecision( "n" )
 		} else {
 			pt.SetPrecision(precision)
 		}
@@ -403,6 +403,8 @@ func GuessPrecision(ts int64) (string, error) {
 	// any time stamp given can be interpreted as nano, so it's our initial best
 	timeCalc, err := SafeCalcTime(ts, precisions[0])
 
+	// we want to return default here, but there's certainly something wrong.
+	// we can't even parse the value as ns.  this will cascade up to other functions.  
 	if err != nil {
 		return "", err
 	}
@@ -412,21 +414,36 @@ func GuessPrecision(ts int64) (string, error) {
 	
 	nextDist := bestDist
 	nextPrec := bestPrec
-	
-	for i := 1; nextDist <= bestDist && i < len(precisions); i++ {
+
+	i := 1
+
+	// once the distance using some precison increases, we'll always increase so we can stop looping.
+	// It might seem more intuitive to loop over the list of precisions and then 'break' on this condition
+	// but I thought this to be the more important condition in the logic, so I put in the most prominent location.
+	// likewise, I kept the index control variable out of the 'for' because it confused what was going on a bit
+	for nextDist <= bestDist {
+		// make sure we update our best version so far 
 		bestDist = nextDist
 		bestPrec = nextPrec
+
+		// we reached the end of the slice, we should stop.  
+		if  i >= len(precisions) {
+			break
+		}
 		
 		nextPrec = precisions[i]
 		timeCalc, err := SafeCalcTime(ts, nextPrec)
+		// this is not necessarily an error.  this means that this precision and all after it will
+		// cause an overflow.  
 		if err != nil {
-			return "", err
+			break
 		}
+		// set the nextDist and increment to the next precision
+		i++
 		nextDist = math.Abs(timeNow.Sub(timeCalc).Seconds())
 	}
 
-	//return bestPrec, nil
-	return "n", nil
+	return bestPrec, nil
 }
 
 
